@@ -1,0 +1,55 @@
+<html>
+<head>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css"
+          integrity="sha512-xodZBNTC5n17Xt2atTPuE1HxjVMSvLVW9ocqUKLsCC5CXdbqCmblAshOMAS6/keqq/sMZMZ19scR4PsZChSR7A=="
+          crossorigin=""/>
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"
+            integrity="sha512-XQoYMqMTK8LvdxXYG3nZ448hOEQiglfqkJs1NOQV44cWnUrBc8PkAOcXy20w0vlaXaVUearIOBhiXZ5V3ynxwA=="
+            crossorigin=""></script>
+</head>
+<body>
+<form id="form">
+    <input type="datetime-local" name="time">
+    <button type="submit">Search</button>
+</form>
+<div id="results"></div>
+<div id="map" style="height: 600px"></div>
+<script type="text/javascript">
+    const form = document.getElementById('form');
+    const results = document.getElementById('results');
+    form.time.value = new Date(Date.now() - 86400e3).toISOString().replace(/:\d+\.\d+\D$/, '');
+
+    const map = L.map('map').setView([3.139, 101.6869], 13);
+    const markers = [];
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    }).addTo(map);
+
+    form.onsubmit = async function(e){
+        e.preventDefault();
+        const date = new Date(form.time.value);
+        const timestamps = [];
+        for (let mins = -60; mins <= 60; mins += 10) {
+            timestamps.push(date/1e3 + mins*60);
+        }
+        const resp = await fetch(`https://api.wheretheiss.at/v1/satellites/25544/positions?timestamps=${timestamps}&units=miles`)
+        const json = await resp.json();
+        results.innerHTML = json.map((e)=>new Date(e.timestamp*1e3).toISOString() + ' ' + round(e.latitude) + ',' + round(e.longitude)).join('<br>');
+
+        markers.forEach(m=>map.removeLayer(m));
+
+        json.forEach(e=> {
+            markers.push(L.marker([e.latitude, e.longitude]).addTo(map)
+                .bindPopup(new Date(e.timestamp*1e3).toISOString() + ' ' + round(e.latitude) + ',' + round(e.longitude))
+                .openPopup());
+        });
+        const group = new L.featureGroup(markers);
+        map.fitBounds(group.getBounds());
+    }
+
+    function round(num) {
+        return num.toFixed(3);
+    }
+</script>
+</body>
+</html>
